@@ -19,12 +19,22 @@ const incidentReportSchema = new mongoose.Schema(
       trim: true,
       maxlength: 120,
     },
-    category: {
-    type: String,
-    required: true,
-    // 🚀 FIXED: Added "sports", "crime", and "general" to the allowed list!
-    enum: ["medical", "sports", "economic", "technical", "crime", "environment", "general"]
-  },
+   category: {
+      type: String,
+      required: true,
+      // 🚀 FIXED: Strictly alphabetical and "other" replaces "general"
+      enum: [
+        "civil",
+        "crime",
+        "economic",
+        "environment",
+        "medical",
+        "other",
+        "sports",
+        "technical"
+      ]
+    },
+    
     description: {
       type: String,
       required: true,

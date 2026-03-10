@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Trash2, Activity, User, Mail, Calendar, MapPin, AlertTriangle, LogOut } from "lucide-react";
+import { Trash2, Activity, User, Mail, Calendar, MapPin, AlertTriangle, LogOut, Shield } from "lucide-react";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -14,7 +14,7 @@ export default function Profile() {
     navigate("/login");
   };
 
-useEffect(() => {
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { navigate("/login"); return; }
 
@@ -87,10 +87,25 @@ useEffect(() => {
           <div className="flex-1 text-center md:text-left">
             <h1 className="text-4xl font-black text-slate-900 mb-2">{user.name}</h1>
             <p className="text-slate-500 font-medium mb-6 flex items-center justify-center md:justify-start gap-2"><Mail size={16} /> {user.email}</p>
+            
+            {/* 🚀 DYNAMIC ROLE BADGE WRAPPER */}
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs font-bold uppercase tracking-wider text-slate-400">
-              <span className="bg-slate-50 px-4 py-2 rounded-xl flex items-center gap-2"><User size={14} /> {user.googleId ? "Google Account" : "Standard Account"}</span>
-              <span className="bg-slate-50 px-4 py-2 rounded-xl flex items-center gap-2"><Calendar size={14} /> Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+              
+              {user.role === "admin" ? (
+                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm">
+                  <Shield size={14} /> System Administrator
+                </span>
+              ) : (
+                <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl flex items-center gap-2 text-slate-500">
+                  <User size={14} /> {user.googleId ? "Google Account" : "Standard Account"}
+                </span>
+              )}
+
+              <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl flex items-center gap-2 text-slate-500">
+                <Calendar size={14} /> Joined {new Date(user.createdAt).toLocaleDateString()}
+              </span>
             </div>
+
           </div>
           <button onClick={logout} className="bg-red-50 text-red-600 font-bold px-6 py-3 rounded-xl hover:bg-red-100 transition">Logout</button>
         </div>

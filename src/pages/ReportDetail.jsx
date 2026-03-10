@@ -3,8 +3,23 @@ import { useParams, Link } from "react-router-dom";
 import { 
   ThumbsUp, ThumbsDown, Flag, ArrowLeft, 
   MessageSquare, Ghost, User as UserIcon, AlertTriangle,
-  Pencil, Trash2, Check, X // 🚀 Added new icons for edit/delete
+  Pencil, Trash2, Check, X,
+  // 🚀 IMPORTED THE CATEGORY ICONS
+  ShieldAlert, HeartPulse, Banknote, 
+  Cpu, Leaf, HelpCircle, Trophy, Landmark 
 } from "lucide-react";
+
+// 🚀 ADDED: Category Styles Dictionary to match the Home page theme
+const CATEGORY_STYLES = {
+  civil: { color: "text-purple-700 bg-purple-50 border-purple-200", icon: <Landmark size={14}/> },
+  medical: { color: "text-rose-700 bg-rose-50 border-rose-200", icon: <HeartPulse size={14}/> },
+  sports: { color: "text-amber-700 bg-amber-50 border-amber-200", icon: <Trophy size={14}/> },
+  economic: { color: "text-emerald-700 bg-emerald-50 border-emerald-200", icon: <Banknote size={14}/> },
+  technical: { color: "text-cyan-700 bg-cyan-50 border-cyan-200", icon: <Cpu size={14}/> },
+  environment: { color: "text-green-700 bg-green-50 border-green-200", icon: <Leaf size={14}/> },
+  crime: { color: "text-red-700 bg-red-50 border-red-200", icon: <ShieldAlert size={14}/> },
+  other: { color: "text-slate-700 bg-slate-100 border-slate-200", icon: <HelpCircle size={14}/> }
+};
 
 export default function ReportDetail() {
   const { id } = useParams();
@@ -14,11 +29,9 @@ export default function ReportDetail() {
   const [isAnon, setIsAnon] = useState(true);
   const [error, setError] = useState(null);
 
-  // 🚀 NEW: State for editing comments
   const [editingId, setEditingId] = useState(null);
   const [editContent, setEditContent] = useState("");
 
-  // 🚀 NEW: Get the current logged-in user's ID from their token to check ownership
   const token = localStorage.getItem("token");
   let currentUserId = null;
   if (token) {
@@ -46,39 +59,62 @@ export default function ReportDetail() {
       .catch(err => setComments([]));
   }, [id]);
 
+  // 🚀 FIXED: UI now safely forces arrays to render the correct lengths
   const handleLike = async () => {
     if (!token) return alert("Please log in to like a report.");
-    const res = await fetch(`http://localhost:5000/api/incidents/${id}/like`, {
-      method: "POST", headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    if (data.likes !== undefined) {
-      setReport({ ...report, likes: new Array(data.likes), dislikes: new Array(data.dislikes) }); 
-    }
+    try {
+      const res = await fetch(`http://localhost:5000/api/incidents/${id}/like`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReport(prev => ({ 
+          ...prev, 
+          likes: Array(data.likes).fill("id"), 
+          dislikes: Array(data.dislikes).fill("id") 
+        }));
+      } else {
+        alert("❌ " + (data.message || "Failed to like"));
+      }
+    } catch(err) { alert("Network error."); }
   };
 
   const handleDislike = async () => {
     if (!token) return alert("Please log in to dislike a report.");
-    const res = await fetch(`http://localhost:5000/api/incidents/${id}/dislike`, {
-      method: "POST", headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    if (data.dislikes !== undefined) {
-      setReport({ ...report, likes: new Array(data.likes), dislikes: new Array(data.dislikes) }); 
-    }
+    try {
+      const res = await fetch(`http://localhost:5000/api/incidents/${id}/dislike`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReport(prev => ({ 
+          ...prev, 
+          likes: Array(data.likes).fill("id"), 
+          dislikes: Array(data.dislikes).fill("id") 
+        }));
+      } else {
+        alert("❌ " + (data.message || "Failed to dislike"));
+      }
+    } catch(err) { alert("Network error."); }
   };
 
   const handleFlag = async () => {
     if (!token) return alert("Please log in to flag a report.");
     const reason = prompt("Reason for flagging (spam, fake, offensive, hate):");
     if (!reason) return;
-    const res = await fetch(`http://localhost:5000/api/incidents/${id}/flag`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ reason: reason.toLowerCase() })
-    });
-    const data = await res.json();
-    alert(data.message);
+    try {
+      const res = await fetch(`http://localhost:5000/api/incidents/${id}/flag`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: reason.toLowerCase() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("✅ " + data.message);
+      } else {
+        alert("❌ " + data.message);
+      }
+    } catch(err) { alert("Network error."); }
   };
 
   const postComment = async (e) => {
@@ -134,9 +170,6 @@ export default function ReportDetail() {
     } catch (err) { console.error("Failed to report comment", err); }
   };
 
-  // --------------------------------------------------------
-  // 🚀 NEW: DELETE AND EDIT COMMENT FUNCTIONS
-  // --------------------------------------------------------
   const deleteComment = async (commentId) => {
     if (!window.confirm("Are you sure you want to delete this comment?")) return;
     try {
@@ -169,7 +202,6 @@ export default function ReportDetail() {
         setComments(comments.map(c => c._id === commentId ? { ...c, text: data.text } : c));
         setEditingId(null);
       } else {
-        // Show the actual error from the backend (e.g., "Not authorized")
         alert(`Failed: ${data.message || "Unknown error"}`);
       }
     } catch (err) { 
@@ -177,6 +209,7 @@ export default function ReportDetail() {
       alert("Network Error: Backend server is offline. Check your terminal.");
     }
   };
+
   if (error) return (
     <div className="min-h-screen flex flex-col items-center justify-center p-20 text-center">
       <h2 className="text-2xl font-black text-slate-800 mb-4">{error}</h2>
@@ -184,6 +217,10 @@ export default function ReportDetail() {
     </div>
   );
   if (!report) return <div className="min-h-screen flex items-center justify-center text-xl font-black text-slate-400">Loading Evidence...</div>;
+
+  // 🚀 Calculate which style to apply based on the report category
+  const catKey = report.category?.toLowerCase() || "other";
+  const catConfig = CATEGORY_STYLES[catKey] || CATEGORY_STYLES["other"];
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -207,8 +244,9 @@ export default function ReportDetail() {
         <div className="p-12">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <span className="inline-block px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest text-blue-600 bg-blue-50 mb-4">
-                {report.category || "General"}
+              {/* 🚀 DYNAMIC BADGE APPLIED HERE */}
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest border mb-4 ${catConfig.color}`}>
+                {catConfig.icon} {report.category || "Other"}
               </span>
               <h1 className="text-4xl font-black text-slate-900 leading-tight">{report.title}</h1>
             </div>
@@ -269,7 +307,7 @@ export default function ReportDetail() {
             </div>
           ) : (
             comments.map(c => {
-              const isOwner = currentUserId && c.authorId === currentUserId; // 🚀 Check if logged-in user owns this comment
+              const isOwner = currentUserId && c.authorId === currentUserId; 
               
               return (
               <div key={c._id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -282,7 +320,6 @@ export default function ReportDetail() {
                   {c.isReported && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Under Review</span>}
                 </div>
                 
-                {/* 🚀 EDIT MODE TOGGLE */}
                 {editingId === c._id ? (
                   <div className="mt-2 mb-4">
                     <textarea 
@@ -312,7 +349,6 @@ export default function ReportDetail() {
                     <ThumbsDown size={14} /> {Array.isArray(c.dislikes) ? c.dislikes.length : (c.dislikes || 0)}
                   </button>
                   
-                  {/* 🚀 ONLY SHOW EDIT/DELETE TO THE AUTHOR */}
                   {isOwner && editingId !== c._id && (
                     <>
                       <button onClick={() => { setEditingId(c._id); setEditContent(c.text); }} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-500 transition ml-auto sm:ml-0">

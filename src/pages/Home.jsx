@@ -4,8 +4,8 @@ import {
   ShieldAlert, HeartPulse, Banknote, 
   Cpu, Leaf, HelpCircle, MapPin, Ghost, User, 
   Play, Image as ImageIcon, Map as MapIcon, LayoutGrid,
-  Search, X, Trophy // 🚀 NEW: Added Trophy for Sports, removed FlaskConical
-} from "lucide-react";
+  Search, X, Trophy, Landmark 
+} from "lucide-react"; // 🚀 Added 'Landmark' for the Civil category
 
 // Import Leaflet map components and CSS
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -24,16 +24,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// 🚀 UPDATED: Removed Science, Added Sports, Added General
+// 🚀 ADDED: The Civil Category configuration
 const CATEGORIES = [
   { id: "all", label: "All Feed", color: "from-slate-700 to-slate-900", icon: null },
+  { id: "civil", label: "Civil", color: "from-indigo-400 to-purple-500", shadow: "shadow-indigo-100", icon: <Landmark size={18}/> },
   { id: "medical", label: "Medical", color: "from-pink-400 to-rose-500", shadow: "shadow-rose-100", icon: <HeartPulse size={18}/> },
   { id: "sports", label: "Sports", color: "from-orange-400 to-amber-500", shadow: "shadow-amber-100", icon: <Trophy size={18}/> },
   { id: "economic", label: "Economic", color: "from-emerald-400 to-teal-500", shadow: "shadow-emerald-100", icon: <Banknote size={18}/> },
   { id: "technical", label: "Technical", color: "from-blue-400 to-cyan-500", shadow: "shadow-cyan-100", icon: <Cpu size={18}/> },
   { id: "environment", label: "Environment", color: "from-lime-400 to-green-600", shadow: "shadow-green-100", icon: <Leaf size={18}/> },
   { id: "crime", label: "Crime", color: "from-red-500 to-rose-600", shadow: "shadow-red-100", icon: <ShieldAlert size={18}/> },
-  { id: "general", label: "General", color: "from-slate-400 to-slate-500", shadow: "shadow-slate-100", icon: <HelpCircle size={18}/> }
+  { id: "other", label: "Other", color: "from-slate-400 to-slate-500", shadow: "shadow-slate-100", icon: <HelpCircle size={18}/> }
 ];
 
 export default function Home() {
@@ -44,7 +45,7 @@ export default function Home() {
   
   const [reports, setReports] = useState([]);
   
-  const userLocation = "Hyderabad"; 
+  const userLocation = "India"; 
 
   useEffect(() => {
     fetch("http://localhost:5000/api/incidents/public")
@@ -54,16 +55,16 @@ export default function Home() {
   }, []);
 
   const filteredReports = reports.filter(r => {
-    const rCategory = r.category?.toLowerCase() || "general"; // Default to general if missing
+    const rCategory = r.category?.toLowerCase() || "other"; // Default to other if missing
     const rLocation = r.location?.toLowerCase() || "";
     const rTitle = r.title?.toLowerCase() || "";
     const rDesc = r.description?.toLowerCase() || "";
     const query = searchQuery.toLowerCase();
 
-    // If the active category is "general", we should also catch reports labeled "other"
+    // If the active category is "other", we should also catch reports labeled "other"
     const categoryMatch = activeCategory === "all" || 
                           rCategory === activeCategory || 
-                          (activeCategory === "general" && rCategory === "other");
+                          (activeCategory === "other" && rCategory === "other");
 
     const locationMatch = !localOnly || rLocation.includes(userLocation.toLowerCase());
     const searchMatch = !query || rTitle.includes(query) || rDesc.includes(query);
@@ -164,9 +165,8 @@ export default function Home() {
               {filteredReports.map((report, index) => {
                 const lat = 17.3850 + (Math.sin(index) * 0.05);
                 const lng = 78.4867 + (Math.cos(index) * 0.05);
-                // 🚀 Fallback config to "General" if category is missing or "Other"
                 const config = CATEGORIES.find(c => c.id === report.category?.toLowerCase()) 
-                               || CATEGORIES.find(c => c.id === "general");
+                               || CATEGORIES.find(c => c.id === "other");
 
                 return (
                   <Marker key={report._id} position={[lat, lng]}>
@@ -209,9 +209,8 @@ export default function Home() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {filteredReports.map((report) => {
-                  // 🚀 Fallback config to "General" if category is missing or "Other"
                   const config = CATEGORIES.find(c => c.id === report.category?.toLowerCase()) 
-                                 || CATEGORIES.find(c => c.id === "general");
+                                 || CATEGORIES.find(c => c.id === "other");
                                  
                   const fullMediaUrl = report.mediaUrl ? `http://localhost:5000${report.mediaUrl}` : null;
                   

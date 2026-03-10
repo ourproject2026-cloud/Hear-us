@@ -1,88 +1,75 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { Shield, Plus, LogIn, User, LogOut } from "lucide-react";
+import { Shield, LogOut, User } from "lucide-react"; 
 
 export default function Navbar() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setIsLoggedIn(false);
-      setIsAdmin(false);
-      return;
+  const token = localStorage.getItem("token");
+  
+  // 🚀 Logic to verify Admin status based on the database 'role' field
+  let isAdmin = false;
+  if (token) {
+    try {
+      // Decode the JWT payload (the middle part of the token)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      
+      // Matches the 'role' property established in your authRoutes and database
+      isAdmin = payload.role === "admin"; 
+    } catch (e) {
+      console.error("Session invalid or expired");
+      // Optional: localStorage.removeItem("token"); // Clear corrupt token
     }
-
-    setIsLoggedIn(true);
-
-    const checkRole = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/auth/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.role === "admin") setIsAdmin(true);
-      } catch (err) {
-        console.error("Auth check failed", err);
-      }
-    };
-    checkRole();
-  }, []);
+  }
 
   const handleLogout = () => {
-    localStorage.clear();
-    setIsLoggedIn(false);
-    setIsAdmin(false);
+    localStorage.removeItem("token");
     navigate("/login");
   };
 
   return (
-    <nav className="flex items-center justify-between p-4 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
-      {/* LOGO */}
-      <Link to="/" className="text-2xl font-black tracking-tighter">
-        Hear<span className="text-blue-600">Us</span>
+    <nav className="flex justify-between items-center px-8 py-4 bg-white shadow-sm border-b border-slate-100 sticky top-0 z-50">
+      <Link to="/" className="text-3xl font-black text-blue-600 tracking-tight hover:opacity-80 transition">
+        HearUs
       </Link>
-      
-      <div className="flex items-center gap-4">
-        <Link to="/" className="text-sm font-bold text-slate-500 hover:text-blue-600 transition">Explore</Link>
-        
-        <Link 
-          to="/submit" 
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2.5 rounded-2xl font-black text-sm shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
-        >
-          <Plus size={18} strokeWidth={3} /> Report Incident
+
+      <div className="flex items-center gap-6">
+        <Link to="/" className="font-bold text-slate-600 hover:text-blue-600 transition">
+          Explore
         </Link>
         
+        <Link to="/submit" className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition shadow-md shadow-blue-200">
+          + Report Incident
+        </Link>
+        
+        {/* 🛡️ THE BOUNCER: Only renders Command Center for users with role: "admin" */}
         {isAdmin && (
-          <Link to="/admin" className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-2xl font-bold text-sm hover:bg-slate-800 transition">
+          <Link 
+            to="/admin" 
+            className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition shadow-md border border-slate-700"
+          >
             <Shield size={18} /> Command Center
           </Link>
         )}
 
-        {/* 🚀 AUTH SECTION: Logic for Login vs Profile */}
-        {!isLoggedIn ? (
-          <Link 
-            to="/login" 
-            className="flex items-center gap-2 border-2 border-slate-100 text-slate-600 px-5 py-2 rounded-2xl font-bold text-sm hover:border-blue-600 hover:text-blue-600 transition-all"
-          >
-            <LogIn size={18} /> Login
-          </Link>
-        ) : (
-          <div className="flex items-center gap-2">
-             <Link to="/profile" className="p-2.5 bg-slate-50 text-slate-500 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition">
-                <User size={20} />
-             </Link>
-             <button 
-                onClick={handleLogout}
-                className="p-2.5 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition"
+        <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
+          {token ? (
+            <>
+              <Link to="/profile" className="text-slate-500 hover:text-blue-600 transition" title="My Profile">
+                <User size={24} />
+              </Link>
+              <button 
+                onClick={handleLogout} 
+                className="text-slate-400 hover:text-red-500 transition" 
                 title="Logout"
-             >
-                <LogOut size={20} />
-             </button>
-          </div>
-        )}
+              >
+                <LogOut size={24} />
+              </button>
+            </>
+          ) : (
+            <Link to="/login" className="font-bold text-slate-600 hover:text-blue-600 transition">
+              Login
+            </Link>
+          )}
+        </div>
       </div>
     </nav>
   );

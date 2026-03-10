@@ -10,33 +10,35 @@ export default function SubmitReport() {
   const [mediaFile, setMediaFile] = useState(null); 
   const [loading, setLoading] = useState(false);
 
-  // NEW: State for GPS coordinates
+  // State for GPS coordinates
   const [latitude, setLatitude] = useState(null);
   const [longitude, setLongitude] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
-// ✅ UPDATED: Strictly alphabetical, with "General" at the end!
+  // ✅ FIXED: Capitalized "Civil" so the UI button looks consistent with the others
   const categories = [
+    "Civil",
     "Crime", 
     "Economic", 
     "Environment", 
     "Medical", 
-    "Sports", 
-    "Technical", 
-    "General" 
+    "Other", 
+    "Sports",
+    "Technical"
   ];
 
   const mapCategory = (uiCategory) => {
     const map = {
+      Civil: "civil",
       Crime: "crime",
       Economic: "economic",
       Environment: "environment",
       Medical: "medical",
+      Other: "other",
       Sports: "sports",
-      Technical: "technical",
-      General: "general",
+      Technical: "technical"
     };
-    return map[uiCategory] || "general";
+    return map[uiCategory] || "other";
   };
 
   const handleFileChange = (e) => {
@@ -45,7 +47,7 @@ export default function SubmitReport() {
     }
   };
 
-  // NEW: Function to get exact GPS coordinates
+  // Function to get exact GPS coordinates
   const handleGetLocation = () => {
     setLocationLoading(true);
     if ("geolocation" in navigator) {
@@ -66,7 +68,7 @@ export default function SubmitReport() {
     }
   };
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (description.length < 20) {
@@ -105,7 +107,6 @@ const handleSubmit = async (e) => {
       const data = await res.json();
 
       if (!res.ok) {
-        // This will now successfully throw the exact backend error to your screen!
         throw new Error(data.error || data.message || "Submission failed");
       }
 
@@ -121,7 +122,6 @@ const handleSubmit = async (e) => {
       document.getElementById("media-upload").value = "";
       
     } catch (err) {
-      // ✅ THIS IS THE PART THAT WAS MISSING!
       alert(err.message || "Submission error. Check your connection.");
     } finally {
       setLoading(false);
@@ -203,7 +203,6 @@ const handleSubmit = async (e) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* UPDATED: Location Input with Auto-Locate Button */}
             <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Location / Area</label>
                 <div className="relative">
@@ -228,7 +227,6 @@ const handleSubmit = async (e) => {
                     {locationLoading ? "..." : latitude ? "Secured" : "Auto-Locate"}
                   </button>
                 </div>
-                {/* Visual feedback when coordinates are locked */}
                 {latitude && longitude && (
                   <p className="text-[10px] text-emerald-500 font-bold ml-2 flex items-center gap-1">
                     <MapPin size={10} /> GPS Locked: {latitude.toFixed(4)}, {longitude.toFixed(4)}
