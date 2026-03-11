@@ -17,7 +17,7 @@ const incidentReportSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 120,
+      maxlength: 200,
     },
    category: {
       type: String,

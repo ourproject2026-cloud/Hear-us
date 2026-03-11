@@ -64,7 +64,9 @@ router.get("/:id", async (req, res) => {
   try {
     const report = await IncidentReport.findById(req.params.id);
     res.json(report);
-  } catch (err) { res.status(404).send(); }
+  } catch (err) {
+    res.status(404).send();
+  }
 });
 
 // ✅ Create report

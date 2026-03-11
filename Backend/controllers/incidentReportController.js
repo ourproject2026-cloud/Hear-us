@@ -1,7 +1,7 @@
 const IncidentReport = require("../models/IncidentReport");
+const User = require("../models/User"); // Needed to fetch user name
+const { verifyReport } = require("../utils/aiModerator");
 const crypto = require("crypto");
-const User = require("../models/User"); 
-const { verifyReport } = require("../utils/aiModerator"); 
 
 const generateReportId = () => {
   return "REP-" + crypto.randomBytes(4).toString("hex").toUpperCase();
@@ -9,99 +9,95 @@ const generateReportId = () => {
 
 exports.createIncidentReport = async (req, res) => {
   try {
-    const { title, category, description, location, isAnonymous, latitude, longitude } = req.body;
+    const { title, category, description, location } = req.body;
+    const isAnonymous = req.body.isAnonymous === true || req.body.isAnonymous === "true";
 
     if (!title || !category || !description) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    // Get user ID from JWT
+    const safeUserId = req.user.userId || req.user.id || req.user._id;
+
+    // Fetch user from DB (to get name)
+    const user = await User.findById(safeUserId);
+    console.log("User fetched from DB:", user);
+
+    // Handle media upload
     let mediaUrl = "";
     let mediaType = "";
 
     if (req.file) {
       mediaUrl = `/uploads/${req.file.filename}`;
-      if (req.file.mimetype.startsWith("image/")) {
+
+      if (req.file.mimetype.startsWith("image")) {
         mediaType = "image";
-      } else if (req.file.mimetype.startsWith("video/")) {
+      } else if (req.file.mimetype.startsWith("video")) {
         mediaType = "video";
-      } else if (req.file.mimetype.startsWith("audio/")) {
+      } else if (req.file.mimetype.startsWith("audio")) {
         mediaType = "audio";
       } else {
         mediaType = "other";
       }
     }
 
-    const isAnon = isAnonymous === 'true' || isAnonymous === true;
-    const aiStatus = await verifyReport(title, description, category);
-
-    // 🚀 NEW: Print the user token payload to the terminal to see what's inside!
-    console.log("--- NEW REPORT SUBMISSION ---");
-    console.log("Token Data (req.user):", req.user);
-    
-    const safeUserId = req.user?.id || req.user?.userId || req.user?._id;
-    console.log("Extracted safeUserId:", safeUserId);
-
-    let finalAuthorName = "Verified User"; 
-    
-    if (isAnon) {
-      finalAuthorName = "Anonymous";
-    } else if (safeUserId) {
-      const foundUser = await User.findById(safeUserId);
-      if (foundUser && foundUser.name) {
-        finalAuthorName = foundUser.name; 
-      }
-    }
+    // AI moderation
+    const moderationStatus = await verifyReport(title, description, category);
 
     const newReport = new IncidentReport({
       reportId: generateReportId(),
-      userId: safeUserId, 
+      userId: safeUserId,
       title,
       category,
       description,
       location: location || "Global",
-      isAnonymous: isAnon,
+      isAnonymous: isAnonymous || false,
       mediaUrl,
       mediaType,
-      latitude: latitude ? parseFloat(latitude) : undefined,
-      longitude: longitude ? parseFloat(longitude) : undefined,
-      authorName: finalAuthorName, 
-      status: aiStatus 
-    });
 
-    console.log("Report ready to save to database. UserId attached:", newReport.userId);
+      // FIX: Proper identity handling
+      authorName: isAnonymous ? "Anonymous" : user?.name || "Unknown",
+
+      status: moderationStatus
+    });
 
     await newReport.save();
 
-    const responseMessage = aiStatus === "approved" 
-      ? "Report secured and automatically approved!" 
-      : "Report secured and sent for manual review.";
-
-    res.status(201).json({ 
-      message: responseMessage, 
-      reportId: newReport.reportId,
-      status: aiStatus
+    res.status(201).json({
+      message:
+        moderationStatus === "approved"
+          ? "Report published successfully"
+          : "Report submitted and pending moderation",
+      reportId: newReport.reportId
     });
+
   } catch (error) {
-    console.error("Error creating report:", error);
-    res.status(500).json({ message: "Failed to submit report", error: error.message });
+    console.error("Create Report Error:", error);
+    res.status(500).json({
+      message: "Failed to submit report",
+      error: error.message
+    });
   }
 };
 
+
+
+
+// PUBLIC FEED
 exports.getPublicReports = async (req, res) => {
   try {
-    const { location } = req.query; 
-    let filter = { status: "approved" };
 
-    if (location && location !== "Global") {
-      filter.location = { $regex: location, $options: "i" };
-    }
-
-    const reports = await IncidentReport.find(filter)
-      .select("reportId title category description authorName location mediaUrl mediaType latitude longitude createdAt status")
+    const reports = await IncidentReport.find({ status: "approved" })
+      .select(
+        "reportId title category description authorName location mediaUrl mediaType createdAt latitude longitude"
+      )
       .sort({ createdAt: -1 });
-      
+
     res.status(200).json(reports);
+
   } catch (error) {
+    console.error("Fetch Public Reports Error:", error);
     res.status(500).json({ message: "Failed to fetch reports" });
   }
 };
+

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ShieldCheck, Ghost, User, UploadCloud, MapPin, LocateFixed } from "lucide-react";
+import { ShieldCheck, Ghost, User } from "lucide-react";
+
 
 export default function SubmitReport() {
   const [title, setTitle] = useState("");
@@ -7,65 +8,27 @@ export default function SubmitReport() {
   const [category, setCategory] = useState("Medical");
   const [location, setLocation] = useState("");
   const [anonymous, setAnonymous] = useState(true);
-  const [mediaFile, setMediaFile] = useState(null); 
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaType, setMediaType] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // State for GPS coordinates
-  const [latitude, setLatitude] = useState(null);
-  const [longitude, setLongitude] = useState(null);
-  const [locationLoading, setLocationLoading] = useState(false);
-
-  // ✅ FIXED: Capitalized "Civil" so the UI button looks consistent with the others
   const categories = [
-    "Civil",
-    "Crime", 
-    "Economic", 
-    "Environment", 
-    "Medical", 
-    "Other", 
-    "Sports",
-    "Technical"
+    "Medical", "Science", "Economic", "Technical", 
+    "Crime", "Civil", "Environment", "Others"
   ];
 
   const mapCategory = (uiCategory) => {
     const map = {
-      Civil: "civil",
-      Crime: "crime",
-      Economic: "economic",
-      Environment: "environment",
       Medical: "medical",
-      Other: "other",
-      Sports: "sports",
-      Technical: "technical"
+      Science: "science",
+      Economic: "economic",
+      Technical: "technical",
+      Crime: "violence",
+      Civil: "harassment",
+      Environment: "environment",
+      Others: "other",
     };
     return map[uiCategory] || "other";
-  };
-
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setMediaFile(e.target.files[0]);
-    }
-  };
-
-  // Function to get exact GPS coordinates
-  const handleGetLocation = () => {
-    setLocationLoading(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLatitude(position.coords.latitude);
-          setLongitude(position.coords.longitude);
-          setLocationLoading(false);
-        },
-        (error) => {
-          alert("Could not get your location. Please allow location access in your browser.");
-          setLocationLoading(false);
-        }
-      );
-    } else {
-      alert("Geolocation is not supported by your browser.");
-      setLocationLoading(false);
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -75,39 +38,34 @@ export default function SubmitReport() {
       return alert("Description must be at least 20 characters.");
     }
 
+    // GET THE TOKEN FROM LOCAL STORAGE
     const token = localStorage.getItem("token"); 
 
-    const formData = new FormData();
-    formData.append("title", title);
-    formData.append("description", description);
-    formData.append("category", mapCategory(category));
-    formData.append("location", location || "Global");
-    formData.append("isAnonymous", anonymous);
-    
-    if (latitude && longitude) {
-      formData.append("latitude", latitude);
-      formData.append("longitude", longitude);
-    }
-    
-    if (mediaFile) {
-      formData.append("media", mediaFile);
-    }
+    const reportData = {
+      title,
+      description,
+      category: mapCategory(category),
+      location: location || "Global",
+      isAnonymous: anonymous,
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+    };
 
     try {
       setLoading(true);
-      
       const res = await fetch("http://localhost:5000/api/incidents", {
         method: "POST",
         headers: { 
-          "Authorization": `Bearer ${token}` 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // Sends the user identity
         },
-        body: formData, 
+        body: JSON.stringify(reportData),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || data.message || "Submission failed");
+        throw new Error(data.message || "Submission failed");
       }
 
       alert(`Report Secured! ID: ${data.reportId}`);
@@ -116,11 +74,8 @@ export default function SubmitReport() {
       setTitle("");
       setDescription("");
       setLocation("");
-      setMediaFile(null);
-      setLatitude(null);
-      setLongitude(null);
-      document.getElementById("media-upload").value = "";
-      
+      setMediaUrl("");
+      setMediaType("");
     } catch (err) {
       alert(err.message || "Submission error. Check your connection.");
     } finally {
@@ -140,6 +95,7 @@ export default function SubmitReport() {
 
       <form onSubmit={handleSubmit} className="space-y-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-blue-500/5">
         
+        {/* Anonymity Selector */}
         <div className="grid grid-cols-2 gap-4 mb-8">
             <button
                 type="button"
@@ -157,6 +113,7 @@ export default function SubmitReport() {
             </button>
         </div>
 
+        {/* Title */}
         <div className="space-y-2">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Subject</label>
           <input
@@ -169,6 +126,7 @@ export default function SubmitReport() {
           />
         </div>
 
+        {/* Category Grid */}
         <div className="space-y-3">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Sector</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -189,6 +147,7 @@ export default function SubmitReport() {
           </div>
         </div>
 
+        {/* Description */}
         <div className="space-y-2">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Full Evidence Description</label>
           <textarea
@@ -202,48 +161,36 @@ export default function SubmitReport() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Location / Area</label>
-                <div className="relative">
-                  <input
-                      type="text"
-                      placeholder="e.g. Hyderabad, India"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold pr-32"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGetLocation}
-                    disabled={locationLoading}
-                    className={`absolute right-2 top-2 bottom-2 px-4 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 ${
-                      latitude 
-                      ? "bg-emerald-100 text-emerald-600" 
-                      : "bg-blue-100 text-blue-600 hover:bg-blue-200"
-                    }`}
-                  >
-                    {latitude ? <ShieldCheck size={14} /> : <LocateFixed size={14} />}
-                    {locationLoading ? "..." : latitude ? "Secured" : "Auto-Locate"}
-                  </button>
-                </div>
-                {latitude && longitude && (
-                  <p className="text-[10px] text-emerald-500 font-bold ml-2 flex items-center gap-1">
-                    <MapPin size={10} /> GPS Locked: {latitude.toFixed(4)}, {longitude.toFixed(4)}
-                  </p>
-                )}
+                <input
+                    type="text"
+                    placeholder="e.g. Hyderabad, India"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold"
+                />
             </div>
 
             <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Upload Evidence (Img/Vid)</label>
-                <div className="relative">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Media Link (Img/Vid)</label>
+                <div className="flex gap-2">
                     <input
-                        id="media-upload"
-                        type="file"
-                        accept="image/*,video/*,audio/*"
-                        onChange={handleFileChange}
-                        className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-3 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 cursor-pointer"
+                        type="text"
+                        placeholder="Paste URL..."
+                        value={mediaUrl}
+                        onChange={(e) => setMediaUrl(e.target.value)}
+                        className="flex-1 bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold text-xs"
                     />
+                    <select 
+                        value={mediaType}
+                        onChange={(e) => setMediaType(e.target.value)}
+                        className="bg-slate-50 border-none rounded-2xl px-3 text-xs font-bold outline-none"
+                    >
+                        <option value="">Type</option>
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                    </select>
                 </div>
             </div>
         </div>

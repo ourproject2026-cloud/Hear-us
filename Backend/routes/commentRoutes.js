@@ -48,19 +48,21 @@ router.post("/", auth, async (req, res) => {
     }
 
     const newComment = new Comment({
-      reportId,
-      text,
-      isAnonymous,
-      parentCommentId: parentCommentId || null,
-      author: finalAuthorName,
-      authorId: safeUserId,
-      likes: [],    // 🚀 FIXED: Starts as empty arrays
-      dislikes: []
+     reportId,
+     text,
+     isAnonymous,
+     parentCommentId: parentCommentId || null,
+
+     displayName: finalAuthorName,
+     userId: safeUserId,
+
+     likes: [],
+     dislikes: []
     });
 
     const savedComment = await newComment.save();
-    res.status(201).json(savedComment);
-  } catch (error) {
+     res.status(201).json(savedComment);
+    } catch (error) {
     console.error("POST COMMENT ERROR:", error);
     res.status(500).json({ message: "Failed to post comment" });
   }

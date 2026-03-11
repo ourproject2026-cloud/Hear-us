@@ -211,8 +211,13 @@ export default function Home() {
                 {filteredReports.map((report) => {
                   const config = CATEGORIES.find(c => c.id === report.category?.toLowerCase()) 
                                  || CATEGORIES.find(c => c.id === "other");
-                                 
-                  const fullMediaUrl = report.mediaUrl ? `http://localhost:5000${report.mediaUrl}` : null;
+                                 const API_BASE = "http://localhost:5000";
+                                 const fullMediaUrl = report.mediaUrl
+                                 ? report.mediaUrl.startsWith("http")
+                                 ? report.mediaUrl
+                                 : `${API_BASE}${report.mediaUrl}`
+                                 : null;
+                  
                   
                   return (
                     <Link key={report._id} to={`/reports/${report._id}`} className="group">
@@ -222,20 +227,27 @@ export default function Home() {
                           {fullMediaUrl ? (
                               report.mediaType === "video" ? (
                                 <div className="h-full w-full relative">
-                                  <video className="w-full h-full object-cover" src={fullMediaUrl} muted playsInline />
+                                  <video
+                                   className="w-full h-full object-cover"
+                                   src={fullMediaUrl}
+                                   controls
+                                   muted
+                                   playsInline
+                                  />
                                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-all">
                                     <Play size={40} fill="white" className="text-white transform group-hover:scale-110 transition-transform" />
                                   </div>
                                 </div>
                               ) : report.mediaType === "audio" ? (
-                                <div className="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-                                  <div className="bg-white p-5 rounded-full shadow-md text-blue-600 mb-3 group-hover:scale-110 transition-transform">
-                                     <Play size={32} fill="currentColor" />
-                                  </div>
-                                  <span className="text-sm font-bold text-slate-500 tracking-widest uppercase">Audio Evidence</span>
-                                </div>
+                                <div className="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+                                 <audio controls className="w-full">
+                                 <source src={fullMediaUrl} />
+                                 </audio>
+                                 </div>
                               ) : (
-                                <img src={fullMediaUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Incident" />
+                                <img
+                                 src={fullMediaUrl}
+                                 onError={(e) => (e.target.style.display = "none")} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Incident" />
                               )
                           ) : (
                             <div className="h-full flex items-center justify-center text-slate-200">

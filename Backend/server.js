@@ -1,8 +1,10 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const passport = require("passport");
 const path = require("path"); // ✅ ADD THIS LINE
-require("dotenv").config();
+
 // Configs
 const connectDB = require("./config/db");
 require("./config/googleAuth"); // Passport Google Strategy
