@@ -3,14 +3,11 @@ import { useParams, Link } from "react-router-dom";
 import { 
   ThumbsUp, ThumbsDown, Flag, ArrowLeft, 
   MessageSquare, Ghost, User as UserIcon, AlertTriangle,
-  Pencil, Trash2, Check, X,
-  // 🚀 IMPORTED THE CATEGORY ICONS
+  Pencil, Trash2, Check, X, CornerDownRight, 
   ShieldAlert, HeartPulse, Banknote, 
   Cpu, Leaf, HelpCircle, Trophy, Landmark 
 } from "lucide-react";
 
-
-// 🚀 ADDED: Category Styles Dictionary to match the Home page theme
 const CATEGORY_STYLES = {
   civil: { color: "text-purple-700 bg-purple-50 border-purple-200", icon: <Landmark size={14}/> },
   medical: { color: "text-rose-700 bg-rose-50 border-rose-200", icon: <HeartPulse size={14}/> },
@@ -32,6 +29,9 @@ export default function ReportDetail() {
 
   const [editingId, setEditingId] = useState(null);
   const [editContent, setEditContent] = useState("");
+
+  const [replyingToId, setReplyingToId] = useState(null);
+  const [replyText, setReplyText] = useState("");
 
   const token = localStorage.getItem("token");
   let currentUserId = null;
@@ -60,7 +60,6 @@ export default function ReportDetail() {
       .catch(err => setComments([]));
   }, [id]);
 
-  // 🚀 FIXED: UI now safely forces arrays to render the correct lengths
   const handleLike = async () => {
     if (!token) return alert("Please log in to like a report.");
     try {
@@ -110,32 +109,40 @@ export default function ReportDetail() {
         body: JSON.stringify({ reason: reason.toLowerCase() })
       });
       const data = await res.json();
-      if (res.ok) {
-        alert("✅ " + data.message);
-      } else {
-        alert("❌ " + data.message);
-      }
+      if (res.ok) alert("✅ " + data.message);
+      else alert("❌ " + data.message);
     } catch(err) { alert("Network error."); }
   };
 
-  const postComment = async (e) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
+  const postComment = async (e, parentId = null) => {
+    if (e) e.preventDefault();
+    
+    const textToSubmit = parentId ? replyText : commentText;
+    if (!textToSubmit.trim()) return;
     if (!token) return alert("Please log in to comment.");
 
     try {
       const res = await fetch(`http://localhost:5000/api/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reportId: id, text: commentText, isAnonymous: isAnon })
+        body: JSON.stringify({ 
+          reportId: id, 
+          text: textToSubmit, 
+          isAnonymous: isAnon,
+          parentCommentId: parentId 
+        })
       });
       if (res.ok) {
         const newComment = await res.json();
-        setComments([newComment, ...comments]); 
-        setCommentText(""); 
-      } else {
-        alert("Failed to post comment.");
-      }
+        setComments(prev => [...prev, newComment]); 
+        
+        if (parentId) {
+          setReplyText("");
+          setReplyingToId(null);
+        } else {
+          setCommentText(""); 
+        }
+      } else alert("Failed to post comment.");
     } catch (err) { alert("Server error while posting comment."); }
   };
 
@@ -158,7 +165,7 @@ export default function ReportDetail() {
 
   const handleReportComment = async (commentId) => {
     if (!token) return alert("Please log in to report a comment.");
-    const reason = prompt("Why are you reporting this comment? (spam, harassment, etc.)");
+    const reason = prompt("Why are you reporting this comment?");
     if (!reason) return;
     try {
       const res = await fetch(`http://localhost:5000/api/comments/${commentId}/report`, {
@@ -178,10 +185,8 @@ export default function ReportDetail() {
         method: "DELETE", headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        setComments(comments.filter(c => c._id !== commentId));
-      } else {
-        alert("Failed to delete comment.");
-      }
+        setComments(comments.filter(c => c._id !== commentId && c.parentCommentId !== commentId));
+      } else alert("Failed to delete comment.");
     } catch (err) { console.error("Error deleting comment", err); }
   };
 
@@ -190,25 +195,15 @@ export default function ReportDetail() {
     try {
       const res = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
         method: "PUT",
-        headers: { 
-          "Content-Type": "application/json", 
-          Authorization: `Bearer ${token}` 
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ text: editContent })
       });
-      
       const data = await res.json(); 
-
       if (res.ok) {
         setComments(comments.map(c => c._id === commentId ? { ...c, text: data.text } : c));
         setEditingId(null);
-      } else {
-        alert(`Failed: ${data.message || "Unknown error"}`);
-      }
-    } catch (err) { 
-      console.error("Network Error:", err);
-      alert("Network Error: Backend server is offline. Check your terminal.");
-    }
+      } else alert(`Failed: ${data.message || "Unknown error"}`);
+    } catch (err) { alert("Network Error: Backend server is offline."); }
   };
 
   if (error) return (
@@ -219,9 +214,120 @@ export default function ReportDetail() {
   );
   if (!report) return <div className="min-h-screen flex items-center justify-center text-xl font-black text-slate-400">Loading Evidence...</div>;
 
-  // 🚀 Calculate which style to apply based on the report category
   const catKey = report.category?.toLowerCase() || "other";
   const catConfig = CATEGORY_STYLES[catKey] || CATEGORY_STYLES["other"];
+
+  const topLevelComments = comments.filter(c => !c.parentCommentId);
+  const getReplies = (parentId) => comments.filter(c => c.parentCommentId === parentId);
+
+  // 🚀 RECURSIVE COMPONENT: Handles infinite depth of replies!
+  const CommentBlock = ({ c, depth = 0 }) => {
+    const isOwner = currentUserId && (c.userId === currentUserId || c.authorId === currentUserId);
+    const replies = getReplies(c._id);
+    
+    return (
+      <div className={`${depth > 0 ? "ml-4 md:ml-8 border-l-[3px] border-slate-200 pl-4 md:pl-6 mt-4" : "bg-slate-50 p-6 rounded-2xl border border-slate-100 mt-6"}`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
+            {c.isAnonymous ? <Ghost size={14}/> : <UserIcon size={14}/>}
+            <span className="text-slate-700">
+              {c.isAnonymous ? "Anonymous" : (c.displayName || c.authorName || "Unknown User")}
+            </span>
+            {isOwner && <span className="text-[10px] ml-2 text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">You</span>}
+          </div>
+          {c.isReported && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Under Review</span>}
+        </div>
+        
+        {editingId === c._id ? (
+          <div className="mt-2 mb-4">
+            <textarea 
+              value={editContent} 
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full bg-white rounded-xl p-4 border-2 border-blue-200 outline-none font-medium focus:border-blue-500 transition-all resize-none"
+              rows="2"
+            />
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => saveEditedComment(c._id)} className="flex items-center gap-1 bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+                <Check size={14} /> Save
+              </button>
+              <button onClick={() => setEditingId(null)} className="flex items-center gap-1 bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-slate-300 transition">
+                <X size={14} /> Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-slate-600 font-medium leading-relaxed">{c.text}</p>
+        )}
+        
+        <div className="flex items-center gap-4 sm:gap-6 mt-4 pt-4 border-t border-slate-200/60 flex-wrap">
+          <button onClick={() => handleCommentReact(c._id, "like")} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition">
+            <ThumbsUp size={14} /> {Array.isArray(c.likes) ? c.likes.length : (c.likes || 0)}
+          </button>
+          <button onClick={() => handleCommentReact(c._id, "dislike")} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-red-600 transition">
+            <ThumbsDown size={14} /> {Array.isArray(c.dislikes) ? c.dislikes.length : (c.dislikes || 0)}
+          </button>
+          
+          {/* 🚀 FIXED: You can now reply to ANY comment, no matter how deep! */}
+          <button onClick={() => setReplyingToId(replyingToId === c._id ? null : c._id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition">
+            <CornerDownRight size={14} /> Reply
+          </button>
+          
+          {isOwner && editingId !== c._id && (
+            <>
+              <button onClick={() => { setEditingId(c._id); setEditContent(c.text); }} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-500 transition ml-auto sm:ml-0">
+                <Pencil size={14} /> Edit
+              </button>
+              <button onClick={() => deleteComment(c._id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-red-500 transition">
+                <Trash2 size={14} /> Delete
+              </button>
+            </>
+          )}
+
+          {!isOwner && (
+            <button onClick={() => handleReportComment(c._id)} className="ml-auto flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-orange-500 transition" title="Report this comment">
+              <AlertTriangle size={14} /> Report
+            </button>
+          )}
+        </div>
+
+        {/* Reply Input Box */}
+        {replyingToId === c._id && (
+          <div className="mt-4 bg-white p-4 rounded-xl border border-blue-100 shadow-inner">
+            <textarea 
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Write a reply..."
+              className="w-full bg-slate-50 rounded-lg p-3 border border-slate-200 outline-none font-medium focus:border-blue-500 transition-all resize-none text-sm mb-3"
+              rows="2"
+            />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button type="button" onClick={() => setIsAnon(false)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!isAnon ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <UserIcon size={14}/> User ID
+                </button>
+                <button type="button" onClick={() => setIsAnon(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isAnon ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <Ghost size={14}/> Anonymous
+                </button>
+              </div>
+              <div className="flex justify-end gap-2 w-full sm:w-auto">
+                <button onClick={() => setReplyingToId(null)} className="text-xs font-bold text-slate-500 hover:text-slate-700 px-3 py-1.5 transition">Cancel</button>
+                <button onClick={() => postComment(null, c._id)} className="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition shadow-md">Post Reply</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 🚀 RECURSION MAGIC: If this comment has replies, render them inside itself! */}
+        {replies.length > 0 && (
+          <div className="mt-2">
+            {replies.map(childReply => (
+              <CommentBlock key={childReply._id} c={childReply} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -245,7 +351,6 @@ export default function ReportDetail() {
         <div className="p-12">
           <div className="flex justify-between items-start mb-6">
             <div>
-              {/* 🚀 DYNAMIC BADGE APPLIED HERE */}
               <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest border mb-4 ${catConfig.color}`}>
                 {catConfig.icon} {report.category || "Other"}
               </span>
@@ -255,9 +360,7 @@ export default function ReportDetail() {
               <Flag size={24} />
             </button>
           </div>
-
           <p className="text-slate-600 text-lg leading-relaxed mb-10 whitespace-pre-wrap">{report.description}</p>
-
           <div className="flex items-center gap-4 border-t border-slate-100 pt-8">
             <button onClick={handleLike} className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold transition">
               <ThumbsUp size={20} /> {report.likes?.length || 0} Likes
@@ -278,7 +381,7 @@ export default function ReportDetail() {
           <MessageSquare className="text-blue-600" /> Community Discussion
         </h2>
 
-        <form onSubmit={postComment} className="mb-10 relative">
+        <form onSubmit={(e) => postComment(e)} className="mb-10 relative">
           <textarea 
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
@@ -301,74 +404,16 @@ export default function ReportDetail() {
           </div>
         </form>
 
-        <div className="space-y-6">
-          {comments.length === 0 ? (
+        {/* 🚀 KICKS OFF THE RECURSION */}
+        <div className="space-y-4">
+          {topLevelComments.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-slate-400 font-bold">No discussion yet. Be the first to share your thoughts.</p>
             </div>
           ) : (
-            comments.map(c => {
-              const isOwner = currentUserId && c.userId === currentUserId;
-              
-              return (
-              <div key={c._id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
-                    {c.isAnonymous ? <Ghost size={14}/> : <UserIcon size={14}/>}
-                    <span className="text-slate-700">{c.displayName || "Unknown User"}</span>
-                     {isOwner && <span className="text-[10px] ml-2 text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">You</span>}
-                  </div>
-                  {c.isReported && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Under Review</span>}
-                </div>
-                
-                {editingId === c._id ? (
-                  <div className="mt-2 mb-4">
-                    <textarea 
-                      value={editContent} 
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full bg-white rounded-xl p-4 border-2 border-blue-200 outline-none font-medium focus:border-blue-500 transition-all resize-none"
-                      rows="2"
-                    />
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => saveEditedComment(c._id)} className="flex items-center gap-1 bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
-                        <Check size={14} /> Save
-                      </button>
-                      <button onClick={() => setEditingId(null)} className="flex items-center gap-1 bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-slate-300 transition">
-                        <X size={14} /> Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-slate-600 font-medium leading-relaxed">{c.text}</p>
-                )}
-                
-                <div className="flex items-center gap-4 sm:gap-6 mt-4 pt-4 border-t border-slate-200/60 flex-wrap">
-                  <button onClick={() => handleCommentReact(c._id, "like")} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition">
-                    <ThumbsUp size={14} /> {Array.isArray(c.likes) ? c.likes.length : (c.likes || 0)}
-                  </button>
-                  <button onClick={() => handleCommentReact(c._id, "dislike")} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-red-600 transition">
-                    <ThumbsDown size={14} /> {Array.isArray(c.dislikes) ? c.dislikes.length : (c.dislikes || 0)}
-                  </button>
-                  
-                  {isOwner && editingId !== c._id && (
-                    <>
-                      <button onClick={() => { setEditingId(c._id); setEditContent(c.text); }} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-500 transition ml-auto sm:ml-0">
-                        <Pencil size={14} /> Edit
-                      </button>
-                      <button onClick={() => deleteComment(c._id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-red-500 transition">
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </>
-                  )}
-
-                  {!isOwner && (
-                    <button onClick={() => handleReportComment(c._id)} className="ml-auto flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-orange-500 transition" title="Report this comment">
-                      <AlertTriangle size={14} /> Report
-                    </button>
-                  )}
-                </div>
-              </div>
-            )})
+            topLevelComments.map(parentComment => (
+              <CommentBlock key={parentComment._id} c={parentComment} depth={0} />
+            ))
           )}
         </div>
       </div>

@@ -23,50 +23,54 @@ router.get("/", async (req, res) => {
 });
 
 /* =========================
-    POST NEW COMMENT
+    POST NEW COMMENT & REPLIES
 ========================= */
 router.post("/", auth, async (req, res) => {
   try {
+    // 🚀 FIXED: We are now extracting parentCommentId safely!
     const { reportId, text, isAnonymous, parentCommentId } = req.body;
+    const safeUserId = req.user.id || req.user.userId || req.user._id;
 
-    if (!text || !reportId) {
-      return res.status(400).json({ message: "Text and reportId are required" });
-    }
-
-    // Safely extract User ID
-    const safeUserId = req.user?.id || req.user?.userId || req.user?._id;
-
-    // Look up the user's real name
-    let finalAuthorName = "Anonymous";
-
-    if (!isAnonymous) {
-     const foundUser = await User.findById(safeUserId);
-
-      if (foundUser && foundUser.name) {
-       finalAuthorName = foundUser.name;
-       } else {
-      finalAuthorName = "Unknown User";
-    }
-}
+    // Look up the user's real name from the database
+    const user = await User.findById(safeUserId);
+    const realName = user ? user.name : "Standard User";
 
     const newComment = new Comment({
-     reportId,
-     text,
-     isAnonymous,
-     parentCommentId: parentCommentId || null,
-
-     displayName: finalAuthorName,
-     userId: safeUserId,
-
-     likes: [],
-     dislikes: []
+      reportId,
+      text,
+      authorId: safeUserId,
+      authorName: isAnonymous ? "Anonymous" : realName,
+      isAnonymous,
+      // 🚀 FIXED: Save the parent ID to the database so it knows it's a reply!
+      parentCommentId: parentCommentId || null
     });
 
-    const savedComment = await newComment.save();
-     res.status(201).json(savedComment);
-    } catch (error) {
-    console.error("POST COMMENT ERROR:", error);
-    res.status(500).json({ message: "Failed to post comment" });
+    await newComment.save();
+    res.status(201).json(newComment);
+  } catch (err) {
+    console.error("Comment Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/* =========================
+   DELETE COMMENT & ITS REPLIES
+========================= */
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    await ModerationReport.deleteMany({ targetId: req.params.id });
+
+    // 🚀 NEW: Delete the main comment AND any comment that has this as a parent
+    await Comment.deleteMany({
+      $or: [{ _id: req.params.id }, { parentCommentId: req.params.id }]
+    });
+
+    res.json({ message: "Comment and replies deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error deleting comment" });
   }
 });
 
