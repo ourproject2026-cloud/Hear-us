@@ -9,6 +9,7 @@ import {
   Cpu, Leaf, HelpCircle, Trophy, Landmark 
 } from "lucide-react";
 
+
 // 🚀 ADDED: Category Styles Dictionary to match the Home page theme
 const CATEGORY_STYLES = {
   civil: { color: "text-purple-700 bg-purple-50 border-purple-200", icon: <Landmark size={14}/> },
@@ -307,15 +308,15 @@ export default function ReportDetail() {
             </div>
           ) : (
             comments.map(c => {
-              const isOwner = currentUserId && c.authorId === currentUserId; 
+              const isOwner = currentUserId && c.userId === currentUserId;
               
               return (
               <div key={c._id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
                     {c.isAnonymous ? <Ghost size={14}/> : <UserIcon size={14}/>}
-                    <span className="text-slate-700">{c.author || c.authorName || "Unknown User"}</span>
-                    {isOwner && <span className="text-[10px] ml-2 text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">You</span>}
+                    <span className="text-slate-700">{c.displayName || "Unknown User"}</span>
+                     {isOwner && <span className="text-[10px] ml-2 text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">You</span>}
                   </div>
                   {c.isReported && <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Under Review</span>}
                 </div>

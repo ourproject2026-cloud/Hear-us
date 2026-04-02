@@ -1,65 +1,84 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ShieldCheck, Ghost, User } from "lucide-react";
 
-
 export default function SubmitReport() {
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Medical");
   const [location, setLocation] = useState("");
   const [anonymous, setAnonymous] = useState(true);
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaType, setMediaType] = useState("");
+  const [mediaFile, setMediaFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [latitude, setLatitude] = useState(null);
+  const [longitude, setLongitude] = useState(null);
 
   const categories = [
-    "Medical", "Science", "Economic", "Technical", 
+    "Medical", "Science", "Economic", "Technical",
     "Crime", "Civil", "Environment", "Others"
   ];
 
   const mapCategory = (uiCategory) => {
     const map = {
       Medical: "medical",
-      Science: "science",
+      Science: "other",
       Economic: "economic",
       Technical: "technical",
-      Crime: "violence",
-      Civil: "harassment",
+      Crime: "crime",
+      Civil: "civil",
       Environment: "environment",
       Others: "other",
     };
     return map[uiCategory] || "other";
   };
 
+  // 📍 Auto get user GPS location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude);
+          setLongitude(position.coords.longitude);
+        },
+        (error) => {
+          console.log("Location error:", error);
+        }
+      );
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (description.length < 20) {
       return alert("Description must be at least 20 characters.");
     }
 
-    // GET THE TOKEN FROM LOCAL STORAGE
-    const token = localStorage.getItem("token"); 
+    const token = localStorage.getItem("token");
 
-    const reportData = {
-      title,
-      description,
-      category: mapCategory(category),
-      location: location || "Global",
-      isAnonymous: anonymous,
-      mediaUrl: mediaUrl,
-      mediaType: mediaType,
-    };
+    const formData = new FormData();
+
+    formData.append("title", title);
+    formData.append("description", description);
+    formData.append("category", mapCategory(category));
+    formData.append("location", location || "Global");
+    formData.append("isAnonymous", anonymous);
+    formData.append("latitude", latitude);
+    formData.append("longitude", longitude);
+
+    if (mediaFile) {
+      formData.append("media", mediaFile);
+    }
 
     try {
       setLoading(true);
+
       const res = await fetch("http://localhost:5000/api/incidents", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Sends the user identity
+        headers: {
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(reportData),
+        body: formData
       });
 
       const data = await res.json();
@@ -69,13 +88,13 @@ export default function SubmitReport() {
       }
 
       alert(`Report Secured! ID: ${data.reportId}`);
-      
+
       // Reset form
       setTitle("");
       setDescription("");
       setLocation("");
-      setMediaUrl("");
-      setMediaType("");
+      setMediaFile(null);
+
     } catch (err) {
       alert(err.message || "Submission error. Check your connection.");
     } finally {
@@ -85,6 +104,7 @@ export default function SubmitReport() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16 bg-[#FBFCFF] min-h-screen">
+
       <div className="text-center mb-12">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-3xl mb-4">
           <ShieldCheck className="text-blue-600" size={32} />
@@ -94,23 +114,26 @@ export default function SubmitReport() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-blue-500/5">
-        
+
         {/* Anonymity Selector */}
         <div className="grid grid-cols-2 gap-4 mb-8">
-            <button
-                type="button"
-                onClick={() => setAnonymous(true)}
-                className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${anonymous ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
-            >
-                <Ghost size={20} /> <span className="font-bold text-sm">Be a Normal (Anon)</span>
-            </button>
-            <button
-                type="button"
-                onClick={() => setAnonymous(false)}
-                className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${!anonymous ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
-            >
-                <User size={20} /> <span className="font-bold text-sm">Display Identity</span>
-            </button>
+          <button
+            type="button"
+            onClick={() => setAnonymous(true)}
+            className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${anonymous ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
+          >
+            <Ghost size={20}/> 
+            <span className="font-bold text-sm">Be a Normal (Anon)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAnonymous(false)}
+            className={`flex items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all ${!anonymous ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
+          >
+            <User size={20}/> 
+            <span className="font-bold text-sm">Display Identity</span>
+          </button>
         </div>
 
         {/* Title */}
@@ -129,6 +152,7 @@ export default function SubmitReport() {
         {/* Category Grid */}
         <div className="space-y-3">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Sector</label>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {categories.map(cat => (
               <button
@@ -136,8 +160,8 @@ export default function SubmitReport() {
                 type="button"
                 onClick={() => setCategory(cat)}
                 className={`py-3 rounded-xl text-xs font-black transition-all border ${
-                  category === cat 
-                  ? "bg-slate-900 text-white border-slate-900 shadow-lg" 
+                  category === cat
+                  ? "bg-slate-900 text-white border-slate-900 shadow-lg"
                   : "bg-white text-slate-500 border-slate-100 hover:border-slate-300"
                 }`}
               >
@@ -150,6 +174,7 @@ export default function SubmitReport() {
         {/* Description */}
         <div className="space-y-2">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Full Evidence Description</label>
+
           <textarea
             rows="5"
             placeholder="Provide as much detail as possible..."
@@ -160,39 +185,32 @@ export default function SubmitReport() {
           />
         </div>
 
+        {/* Location + Media */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Location / Area</label>
-                <input
-                    type="text"
-                    placeholder="e.g. Hyderabad, India"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold"
-                />
-            </div>
 
-            <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Media Link (Img/Vid)</label>
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        placeholder="Paste URL..."
-                        value={mediaUrl}
-                        onChange={(e) => setMediaUrl(e.target.value)}
-                        className="flex-1 bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold text-xs"
-                    />
-                    <select 
-                        value={mediaType}
-                        onChange={(e) => setMediaType(e.target.value)}
-                        className="bg-slate-50 border-none rounded-2xl px-3 text-xs font-bold outline-none"
-                    >
-                        <option value="">Type</option>
-                        <option value="image">Image</option>
-                        <option value="video">Video</option>
-                    </select>
-                </div>
-            </div>
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Location / Area</label>
+
+            <input
+              type="text"
+              placeholder="e.g. Hyderabad, India"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4 focus:border-blue-600 focus:bg-white transition-all outline-none font-bold"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Upload Media</label>
+
+            <input
+              type="file"
+              accept="image/*,video/*,audio/*"
+              onChange={(e) => setMediaFile(e.target.files[0])}
+              className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-5 py-4"
+            />
+          </div>
+
         </div>
 
         <button
@@ -202,7 +220,9 @@ export default function SubmitReport() {
         >
           {loading ? "Securing Report..." : "Submit Report"}
         </button>
+
       </form>
+
     </div>
   );
 }

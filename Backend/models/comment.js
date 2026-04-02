@@ -4,7 +4,7 @@ const commentSchema = new mongoose.Schema(
   {
     reportId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "IncidentReport", // ✅ Linked to the correct model name
+      ref: "IncidentReport",
       required: true,
     },
 
@@ -30,16 +30,30 @@ const commentSchema = new mongoose.Schema(
       trim: true,
     },
 
-    likes: [{ type: String }], // Stores User IDs as strings to track unique reacts
+    // 👍 REACTIONS
+    likes: [{ type: String }],
     dislikes: [{ type: String }],
 
+    // 🧵 THREADING CORE
     parentCommentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
       default: null,
     },
 
-    // MODERATION FIELDS
+    // ⭐ ADD THIS (VERY IMPORTANT)
+    depth: {
+      type: Number,
+      default: 0, // 0 = root comment, 1 = reply, 2 = reply to reply
+    },
+
+    // ⭐ OPTIONAL (for performance)
+    replyCount: {
+      type: Number,
+      default: 0,
+    },
+
+    // 🚨 MODERATION
     isHidden: {
       type: Boolean,
       default: false,

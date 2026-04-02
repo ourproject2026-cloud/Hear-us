@@ -9,7 +9,8 @@ const generateReportId = () => {
 
 exports.createIncidentReport = async (req, res) => {
   try {
-    const { title, category, description, location } = req.body;
+    const { title, category, description, location, latitude, longitude } = req.body;
+
     const isAnonymous = req.body.isAnonymous === true || req.body.isAnonymous === "true";
 
     if (!title || !category || !description) {
@@ -42,25 +43,34 @@ exports.createIncidentReport = async (req, res) => {
     }
 
     // AI moderation
-    const moderationStatus = await verifyReport(title, description, category);
+    let moderationStatus = "pending";
+
+    try {
+      moderationStatus = await verifyReport(title, description, category);
+    } catch (error) {
+      console.error("AI Moderation Error:", error.message);
+      moderationStatus = "pending";
+    }
 
     const newReport = new IncidentReport({
-      reportId: generateReportId(),
-      userId: safeUserId,
-      title,
-      category,
-      description,
-      location: location || "Global",
-      isAnonymous: isAnonymous || false,
-      mediaUrl,
-      mediaType,
+     reportId: generateReportId(),
+     userId: safeUserId,
+     title,
+     category,
+     description,
+     location: location || "Global",
 
-      // FIX: Proper identity handling
-      authorName: isAnonymous ? "Anonymous" : user?.name || "Unknown",
+     latitude: latitude || null,
+     longitude: longitude || null,
 
-      status: moderationStatus
+     isAnonymous: isAnonymous || false,
+     mediaUrl,
+     mediaType,
+
+     authorName: isAnonymous ? "Anonymous" : user?.name || "Unknown",
+
+     status: moderationStatus
     });
-
     await newReport.save();
 
     res.status(201).json({

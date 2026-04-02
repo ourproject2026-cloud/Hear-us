@@ -37,15 +37,17 @@ router.post("/", auth, async (req, res) => {
     const safeUserId = req.user?.id || req.user?.userId || req.user?._id;
 
     // Look up the user's real name
-    let finalAuthorName = "Verified User"; 
-    if (isAnonymous) {
-      finalAuthorName = "Anonymous";
-    } else {
-      const foundUser = await User.findById(safeUserId);
+    let finalAuthorName = "Anonymous";
+
+    if (!isAnonymous) {
+     const foundUser = await User.findById(safeUserId);
+
       if (foundUser && foundUser.name) {
-        finalAuthorName = foundUser.name;
-      }
+       finalAuthorName = foundUser.name;
+       } else {
+      finalAuthorName = "Unknown User";
     }
+}
 
     const newComment = new Comment({
      reportId,
@@ -170,7 +172,7 @@ router.put("/:id", auth, async (req, res) => {
     const safeUserId = req.user?.id || req.user?.userId || req.user?._id;
 
     // Verify ownership
-    if (!comment.authorId || comment.authorId.toString() !== safeUserId.toString()) {
+    if (!comment.userId || comment.userId.toString() !== safeUserId.toString()) {
       return res.status(403).json({ message: "Not authorized to edit this comment" });
     }
 
