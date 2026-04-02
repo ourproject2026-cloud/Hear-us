@@ -206,6 +206,35 @@ router.patch("/:id/status", auth, isAdmin, async (req, res) => {
   } catch (err) { res.status(500).send(); }
 });
 
+// ✅ EDIT a Report (Authorized: Owner Only)
+router.put("/:id", auth, async (req, res) => {
+  try {
+    const report = await IncidentReport.findById(req.params.id);
+    if (!report) return res.status(404).json({ message: "Report not found" });
+
+    // Safely extract user ID
+    const safeUserId = req.user.userId || req.user.id || req.user._id;
+    
+    // Verify the user trying to edit actually owns the report
+    if (report.userId !== safeUserId && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized to edit this report." });
+    }
+
+    // Update the allowed fields
+    const { title, description, category, location } = req.body;
+    if (title) report.title = title;
+    if (description) report.description = description;
+    if (category) report.category = category;
+    if (location) report.location = location;
+
+    await report.save();
+    res.json(report);
+  } catch (err) {
+    console.error("Edit Error:", err);
+    res.status(500).json({ message: "Server error editing report" });
+  }
+});
+
 // ✅ Flag Cleanup (Admin Only)
 router.delete("/admin/flagged/:flagId", auth, isAdmin, async (req, res) => {
   try {

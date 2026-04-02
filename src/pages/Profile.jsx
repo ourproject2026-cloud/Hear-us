@@ -1,12 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Trash2, Activity, User, Mail, Calendar, MapPin, AlertTriangle, LogOut, Shield } from "lucide-react";
+import { Trash2, Activity, User, Mail, Calendar, MapPin, AlertTriangle, LogOut, Shield, Pencil, X } from "lucide-react";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
   const [myReports, setMyReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [debugError, setDebugError] = useState(null);
+  
+  // 🚀 NEW: State for the Edit Modal
+  const [editingReport, setEditingReport] = useState(null);
+  const [editFormData, setEditFormData] = useState({ title: "", description: "", category: "", location: "" });
+  
   const navigate = useNavigate();
 
   const logout = () => {
@@ -20,8 +25,6 @@ export default function Profile() {
 
     setLoading(true);
     const headers = { Authorization: `Bearer ${token}` };
-
-    // 🚀 Added a timestamp to the URL to force a fresh fetch from the server
     const timestamp = new Date().getTime();
 
     Promise.all([
@@ -40,7 +43,6 @@ export default function Profile() {
     .finally(() => setLoading(false));
   }, [navigate]); 
 
-    
   const handleDelete = async (reportId) => {
     if (!window.confirm("Delete this report permanently?")) return;
     const token = localStorage.getItem("token");
@@ -56,6 +58,41 @@ export default function Profile() {
       }
     } catch (err) {
       alert("Server error while deleting.");
+    }
+  };
+
+  // 🚀 NEW: Handlers for Editing
+  const openEditModal = (report) => {
+    setEditingReport(report);
+    setEditFormData({
+      title: report.title,
+      description: report.description,
+      category: report.category || "other",
+      location: report.location
+    });
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:5000/api/incidents/${editingReport._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(editFormData)
+      });
+      
+      if (res.ok) {
+        const updatedReport = await res.json();
+        // Update the report in the UI list instantly
+        setMyReports(myReports.map(r => r._id === updatedReport._id ? updatedReport : r));
+        setEditingReport(null); // Close modal
+      } else {
+        const errorData = await res.json();
+        alert("❌ " + (errorData.message || "Failed to update report."));
+      }
+    } catch (err) {
+      alert("Network error while updating.");
     }
   };
 
@@ -80,7 +117,7 @@ export default function Profile() {
   const totalLikes = myReports.reduce((sum, report) => sum + (report.likes?.length || 0), 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12 space-y-10">
+    <div className="max-w-5xl mx-auto px-6 py-12 space-y-10 relative">
       <section className="bg-white border border-slate-100 shadow-sm rounded-[3rem] p-10">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
           <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=0D8ABC&color=fff&size=128`} alt="avatar" className="w-28 h-28 rounded-full shadow-lg" />
@@ -88,9 +125,7 @@ export default function Profile() {
             <h1 className="text-4xl font-black text-slate-900 mb-2">{user.name}</h1>
             <p className="text-slate-500 font-medium mb-6 flex items-center justify-center md:justify-start gap-2"><Mail size={16} /> {user.email}</p>
             
-            {/* 🚀 DYNAMIC ROLE BADGE WRAPPER */}
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs font-bold uppercase tracking-wider text-slate-400">
-              
               {user.role === "admin" ? (
                 <span className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm">
                   <Shield size={14} /> System Administrator
@@ -100,12 +135,10 @@ export default function Profile() {
                   <User size={14} /> {user.googleId ? "Google Account" : "Standard Account"}
                 </span>
               )}
-
               <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl flex items-center gap-2 text-slate-500">
                 <Calendar size={14} /> Joined {new Date(user.createdAt).toLocaleDateString()}
               </span>
             </div>
-
           </div>
           <button onClick={logout} className="bg-red-50 text-red-600 font-bold px-6 py-3 rounded-xl hover:bg-red-100 transition">Logout</button>
         </div>
@@ -132,26 +165,84 @@ export default function Profile() {
           ) : (
             myReports.map((report) => (
               <div key={report._id} className="group bg-white border border-slate-100 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center hover:shadow-md transition gap-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-black text-slate-800 group-hover:text-blue-600 transition truncate max-w-lg mb-1">{report.title}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-black text-slate-800 group-hover:text-blue-600 transition truncate mb-1">{report.title}</h3>
                   <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
                     <span className="bg-slate-50 px-2 py-1 rounded text-slate-500">{report.category}</span>
                     <span>•</span><span>{new Date(report.createdAt).toLocaleDateString()}</span><span>•</span>
-                    <span className="flex items-center gap-1"><MapPin size={12}/> {report.location}</span>
+                    <span className="flex items-center gap-1 truncate"><MapPin size={12}/> {report.location}</span>
                   </div>
                   <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${report.status === "approved" ? "bg-emerald-100 text-emerald-700" : report.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
                     Status: {report.status || "pending"}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100">
+                
+                {/* 🚀 ADDED EDIT BUTTON HERE */}
+                <div className="flex items-center gap-2 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100">
+                  <button onClick={() => openEditModal(report)} className="p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition" title="Edit Report">
+                    <Pencil size={18} />
+                  </button>
                   <Link to={`/reports/${report._id}`} className="flex-1 md:flex-none text-center bg-slate-50 text-slate-600 font-bold text-sm px-4 py-2 rounded-xl hover:bg-slate-100 transition">View</Link>
-                  <button onClick={() => handleDelete(report._id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition" title="Delete Report"><Trash2 size={18} /></button>
+                  <button onClick={() => handleDelete(report._id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition" title="Delete Report">
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
       </section>
+
+      {/* 🚀 NEW: Edit Report Modal UI overlay */}
+      {editingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-slate-900 flex items-center gap-2"><Pencil className="text-blue-600"/> Edit Report</h2>
+              <button onClick={() => setEditingReport(null)} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={saveEdit} className="space-y-5">
+              <div>
+                <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Title</label>
+                <input type="text" value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 outline-none font-medium focus:border-blue-500 focus:bg-white transition-all" required />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Category</label>
+                  <select value={editFormData.category} onChange={(e) => setEditFormData({...editFormData, category: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 outline-none font-medium focus:border-blue-500 focus:bg-white transition-all cursor-pointer">
+                    <option value="civil">Civil & Infrastructure</option>
+                    <option value="crime">Crime & Safety</option>
+                    <option value="medical">Medical & Health</option>
+                    <option value="environment">Environment</option>
+                    <option value="technical">Technical Issues</option>
+                    <option value="sports">Sports</option>
+                    <option value="economic">Economic</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Location</label>
+                  <input type="text" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 outline-none font-medium focus:border-blue-500 focus:bg-white transition-all" required />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Description</label>
+                <textarea value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 outline-none font-medium focus:border-blue-500 focus:bg-white transition-all min-h-[150px] resize-y" required />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" onClick={() => setEditingReport(null)} className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition">Cancel</button>
+                <button type="submit" className="px-6 py-3 rounded-xl font-black text-white bg-blue-600 hover:bg-blue-700 hover:-translate-y-0.5 transition shadow-lg shadow-blue-200">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -220,13 +220,12 @@ export default function ReportDetail() {
   const topLevelComments = comments.filter(c => !c.parentCommentId);
   const getReplies = (parentId) => comments.filter(c => c.parentCommentId === parentId);
 
-  // 🚀 RECURSIVE COMPONENT: Handles infinite depth of replies!
-  const CommentBlock = ({ c, depth = 0 }) => {
+  const renderCommentBlock = (c, depth = 0) => {
     const isOwner = currentUserId && (c.userId === currentUserId || c.authorId === currentUserId);
     const replies = getReplies(c._id);
     
     return (
-      <div className={`${depth > 0 ? "ml-4 md:ml-8 border-l-[3px] border-slate-200 pl-4 md:pl-6 mt-4" : "bg-slate-50 p-6 rounded-2xl border border-slate-100 mt-6"}`}>
+      <div key={c._id} className={`${depth > 0 ? "ml-4 md:ml-8 border-l-[3px] border-slate-200 pl-4 md:pl-6 mt-4" : "bg-slate-50 p-6 rounded-2xl border border-slate-100 mt-6"}`}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
             {c.isAnonymous ? <Ghost size={14}/> : <UserIcon size={14}/>}
@@ -267,7 +266,6 @@ export default function ReportDetail() {
             <ThumbsDown size={14} /> {Array.isArray(c.dislikes) ? c.dislikes.length : (c.dislikes || 0)}
           </button>
           
-          {/* 🚀 FIXED: You can now reply to ANY comment, no matter how deep! */}
           <button onClick={() => setReplyingToId(replyingToId === c._id ? null : c._id)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-blue-600 transition">
             <CornerDownRight size={14} /> Reply
           </button>
@@ -317,12 +315,9 @@ export default function ReportDetail() {
           </div>
         )}
 
-        {/* 🚀 RECURSION MAGIC: If this comment has replies, render them inside itself! */}
         {replies.length > 0 && (
           <div className="mt-2">
-            {replies.map(childReply => (
-              <CommentBlock key={childReply._id} c={childReply} depth={depth + 1} />
-            ))}
+            {replies.map(childReply => renderCommentBlock(childReply, depth + 1))}
           </div>
         )}
       </div>
@@ -404,16 +399,13 @@ export default function ReportDetail() {
           </div>
         </form>
 
-        {/* 🚀 KICKS OFF THE RECURSION */}
         <div className="space-y-4">
           {topLevelComments.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-slate-400 font-bold">No discussion yet. Be the first to share your thoughts.</p>
             </div>
           ) : (
-            topLevelComments.map(parentComment => (
-              <CommentBlock key={parentComment._id} c={parentComment} depth={0} />
-            ))
+            topLevelComments.map(parentComment => renderCommentBlock(parentComment, 0))
           )}
         </div>
       </div>
