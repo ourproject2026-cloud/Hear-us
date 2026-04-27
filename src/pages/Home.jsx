@@ -4,8 +4,8 @@ import {
   ShieldAlert, HeartPulse, Banknote, 
   Cpu, Leaf, HelpCircle, MapPin, Ghost, User, 
   Play, Image as ImageIcon, Map as MapIcon, LayoutGrid,
-  Search, X, Trophy, Landmark 
-} from "lucide-react"; // 🚀 Added 'Landmark' for the Civil category
+  Search, X, Trophy, Landmark, LocateFixed // 🚀 Added LocateFixed for the auto-location button
+} from "lucide-react"; 
 
 // Import Leaflet map components and CSS
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -24,7 +24,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// 🚀 ADDED: The Civil Category configuration
 const CATEGORIES = [
   { id: "all", label: "All Feed", color: "from-slate-700 to-slate-900", icon: null },
   { id: "civil", label: "Civil", color: "from-indigo-400 to-purple-500", shadow: "shadow-indigo-100", icon: <Landmark size={18}/> },
@@ -44,8 +43,10 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState(""); 
   
   const [reports, setReports] = useState([]);
-  
   const userLocation = "India"; 
+
+  // 🚀 NEW: Auto-Location State
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     fetch("http://localhost:5000/api/incidents/public")
@@ -54,20 +55,60 @@ export default function Home() {
       .catch(err => console.error("API Error:", err));
   }, []);
 
+  // 🚀 NEW: Auto-Location Detection Function
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // Use OpenStreetMap's free API to reverse geocode the coordinates
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          const data = await res.json();
+          
+          // Extract the most relevant local area name
+          const locality = data.address.city || data.address.town || data.address.suburb || data.address.county || data.address.state;
+          
+          if (locality) {
+            setSearchQuery(locality); // Populates the search bar instantly!
+          } else {
+            alert("Could not determine your exact city.");
+          }
+        } catch (error) {
+          console.error("Geocoding error:", error);
+          alert("Failed to connect to location services.");
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === 1) alert("Please allow location permissions in your browser.");
+        else alert("Unable to fetch your location.");
+      }
+    );
+  };
+
   const filteredReports = reports.filter(r => {
-    const rCategory = r.category?.toLowerCase() || "other"; // Default to other if missing
+    const rCategory = r.category?.toLowerCase() || "other"; 
     const rLocation = r.location?.toLowerCase() || "";
     const rTitle = r.title?.toLowerCase() || "";
     const rDesc = r.description?.toLowerCase() || "";
     const query = searchQuery.toLowerCase();
 
-    // If the active category is "other", we should also catch reports labeled "other"
     const categoryMatch = activeCategory === "all" || 
                           rCategory === activeCategory || 
                           (activeCategory === "other" && rCategory === "other");
 
     const locationMatch = !localOnly || rLocation.includes(userLocation.toLowerCase());
-    const searchMatch = !query || rTitle.includes(query) || rDesc.includes(query);
+    const searchMatch = !query || rTitle.includes(query) || rDesc.includes(query) || rLocation.includes(query); // Added location to search check
     
     return categoryMatch && locationMatch && searchMatch;
   });
@@ -112,27 +153,40 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-10 relative max-w-2xl">
-          <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-            <Search className="text-slate-400" size={20} />
+        {/* Search Bar + Auto Location Row */}
+        <div className="mb-10 flex flex-col md:flex-row gap-4 max-w-4xl">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+              <Search className="text-slate-400" size={20} />
+            </div>
+            <input
+              type="text"
+              placeholder="Search reports by title, keyword, or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white border-2 border-slate-100 rounded-3xl py-4 pl-14 pr-12 text-slate-700 font-bold focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all shadow-sm h-full"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-6 flex items-center text-slate-400 hover:text-slate-600 transition"
+                title="Clear search"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder="Search reports by title, keyword, or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border-2 border-slate-100 rounded-3xl py-4 pl-14 pr-12 text-slate-700 font-bold focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all shadow-sm"
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-6 flex items-center text-slate-400 hover:text-slate-600 transition"
-              title="Clear search"
-            >
-              <X size={20} />
-            </button>
-          )}
+
+          {/* 🚀 NEW: Auto-Location Button */}
+          <button 
+            onClick={detectLocation}
+            disabled={isLocating}
+            className="flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-4 rounded-3xl font-black hover:bg-slate-800 transition shadow-lg disabled:opacity-50 min-w-[140px]"
+            title="Find reports near my current location"
+          >
+            <LocateFixed size={20} className={isLocating ? "animate-spin" : ""} />
+            <span>{isLocating ? "Locating..." : "Near Me"}</span>
+          </button>
         </div>
 
         {/* Dynamic Filter Bar */}

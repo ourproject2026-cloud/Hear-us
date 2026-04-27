@@ -144,11 +144,19 @@ export default function Profile() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-6">
+      {/* 🚀 UPDATED: Changed to grid-cols-5 and added the Trust Score box */}
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-6">
         <StatBox label="Total Reports" value={totalReports} color="text-blue-600" />
         <StatBox label="Live (Approved)" value={approvedReports} color="text-emerald-500" />
         <StatBox label="Pending Review" value={pendingReports} color="text-amber-500" />
         <StatBox label="Total Likes Received" value={totalLikes} color="text-pink-500" />
+        
+        {/* 🚀 NEW: Trust Score Display */}
+        <StatBox 
+          label="Trust Score" 
+          value={user.trustScore ?? 50} 
+          color={(user.trustScore ?? 50) < 30 ? "text-red-600" : "text-blue-600"} 
+        />
       </section>
 
       <section className="bg-white border border-slate-100 shadow-sm rounded-[3rem] p-10">

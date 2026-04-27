@@ -16,7 +16,6 @@ export default function Navbar() {
       isAdmin = payload.role === "admin"; 
     } catch (e) {
       console.error("Session invalid or expired");
-      // Optional: localStorage.removeItem("token"); // Clear corrupt token
     }
   }
 
@@ -41,6 +40,7 @@ export default function Navbar() {
         </Link>
         
         {/* 🛡️ THE BOUNCER: Only renders Command Center for users with role: "admin" */}
+        {/* 🚀 FIXED: Removed the duplicate, broken 'user' check to prevent app crashes */}
         {isAdmin && (
           <Link 
             to="/admin" 
@@ -49,7 +49,7 @@ export default function Navbar() {
             <Shield size={18} /> Command Center
           </Link>
         )}
-
+            
         <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
           {token ? (
             <>

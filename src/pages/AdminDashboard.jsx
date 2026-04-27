@@ -62,12 +62,21 @@ const AdminDashboard = () => {
   // 🚀 REPORT ACTIONS
   // -------------------------
   const handleUpdateStatus = async (id, newStatus) => {
+    let message = "";
+    
+    // 🚀 NEW: Asks the admin for a reason before rejecting (Soft Delete)
+    if (newStatus === "rejected") {
+      message = prompt("Reason for rejection (The user will see this):");
+      if (message === null) return; // Stop if the admin clicks "Cancel"
+    }
+
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(`http://localhost:5000/api/incidents/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: newStatus })
+        // Included moderatorMessage in the body
+        body: JSON.stringify({ status: newStatus, moderatorMessage: message })
       });
       if (res.ok) setReports(reports.map(r => r._id === id ? { ...r, status: newStatus } : r));
     } catch (error) { console.error("Update failed", error); }
@@ -103,7 +112,6 @@ const AdminDashboard = () => {
     else if (action === "delete") { await handleDeleteReport(reportId); await handleDismissFlag(flagId, "IncidentReport"); }
   };
 
-  // 🚀 RESTORED: Comment Resolution Action
   const handleResolveFlaggedComment = async (flagId, commentId, action) => {
     if (action === "approve") {
       await handleDismissFlag(flagId, "Comment");
@@ -143,12 +151,14 @@ const AdminDashboard = () => {
           <div key={report._id} className="p-6 border rounded-3xl bg-white shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 hover:border-blue-200 transition">
             <div className="flex-1">
               <h3 className="font-black text-slate-800">{report.title}</h3>
-              <p className="text-xs font-bold text-slate-400 uppercase mt-1">{report.status || "pending"}</p>
+              <p className={`text-xs font-bold uppercase mt-1 ${report.status === 'under_review' ? 'text-orange-500' : 'text-slate-400'}`}>
+                {report.status?.replace('_', ' ') || "pending"}
+              </p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => handleUpdateStatus(report._id, "approved")} className="p-2 text-emerald-600 bg-emerald-50 rounded-xl hover:bg-emerald-100"><CheckCircle size={20}/></button>
-              <button onClick={() => handleUpdateStatus(report._id, "rejected")} className="p-2 text-amber-600 bg-amber-50 rounded-xl hover:bg-amber-100"><XCircle size={20}/></button>
-              <button onClick={() => handleDeleteReport(report._id)} className="p-2 text-red-600 bg-red-50 rounded-xl hover:bg-red-100"><Trash2 size={20}/></button>
+              <button onClick={() => handleUpdateStatus(report._id, "approved")} className="p-2 text-emerald-600 bg-emerald-50 rounded-xl hover:bg-emerald-100" title="Approve"><CheckCircle size={20}/></button>
+              <button onClick={() => handleUpdateStatus(report._id, "rejected")} className="p-2 text-amber-600 bg-amber-50 rounded-xl hover:bg-amber-100" title="Reject (Soft Delete)"><XCircle size={20}/></button>
+              <button onClick={() => handleDeleteReport(report._id)} className="p-2 text-red-600 bg-red-50 rounded-xl hover:bg-red-100" title="Delete Permanent"><Trash2 size={20}/></button>
             </div>
           </div>
         ))}
@@ -167,7 +177,6 @@ const AdminDashboard = () => {
           </div>
         ))}
 
-        {/* 🚀 RESTORED: Flagged Comments Block */}
         {activeTab === "flagged-comments" && flaggedComments.map(flag => (
           <div key={flag._id} className="p-6 border-2 border-orange-100 bg-orange-50 rounded-3xl flex flex-col gap-4">
             <h3 className="font-black text-orange-700 flex items-center gap-2"><MessageSquare size={18}/> Reason: {flag.reason}</h3>

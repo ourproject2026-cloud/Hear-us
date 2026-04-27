@@ -5,7 +5,7 @@ const ModerationReport = require("../models/ModerationReport");
 const auth = require("../middleware/authMiddleware");
 const { createIncidentReport, getPublicReports } = require("../controllers/incidentReportController");
 const upload = require("../middleware/upload");
-
+const User = require("../models/User");
 // 🛡️ INTERNAL HELPER: Check if user is Admin
 const isAdmin = (req, res, next) => {
   if (req.user.role !== "admin") {
@@ -76,32 +76,39 @@ router.post("/", auth, upload.single("media"), createIncidentReport);
 // 🚀 RESTORED MISSING ROUTES: LIKES, DISLIKES & FLAGS
 // =======================================================
 
-// ✅ Like a Report
+/* =========================
+   👍 LIKE POST (Boosts Reputation)
+========================= */
 router.post("/:id/like", auth, async (req, res) => {
   try {
-    const safeUserId = req.user.id || req.user.userId || req.user._id;
     const report = await IncidentReport.findById(req.params.id);
+    const safeUserId = req.user.id || req.user.userId || req.user._id;
+
     if (!report) return res.status(404).json({ message: "Report not found" });
 
+    // Initialize arrays if they don't exist
     if (!report.likes) report.likes = [];
     if (!report.dislikes) report.dislikes = [];
 
-    // Remove from dislikes
-    report.dislikes = report.dislikes.filter(id => id.toString() !== safeUserId.toString());
+    const hasLiked = report.likes.includes(safeUserId);
 
-    // Toggle the like
-    const hasLiked = report.likes.some(id => id.toString() === safeUserId.toString());
     if (hasLiked) {
-      report.likes = report.likes.filter(id => id.toString() !== safeUserId.toString());
+      report.likes.pull(safeUserId); // Remove like
     } else {
-      report.likes.push(safeUserId);
+      report.likes.push(safeUserId); // Add like
+      report.dislikes.pull(safeUserId); // Remove dislike
+
+      // 🚀 REPUTATION BOOST: Reward the author for good content
+      if (report.userId) {
+        await User.findByIdAndUpdate(report.userId, { $inc: { trustScore: 1 } });
+      }
     }
 
     await report.save();
     res.json({ likes: report.likes.length, dislikes: report.dislikes.length });
   } catch (err) {
-    console.error("Like Error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -134,47 +141,57 @@ router.post("/:id/dislike", auth, async (req, res) => {
   }
 });
 
-// ✅ Flag a Report (Auto-triggers AI Moderator)
+/* =========================
+   🚩 FLAG POST (Auto-Hides & Penalizes)
+========================= */
 router.post("/:id/flag", auth, async (req, res) => {
   try {
-    const { reason } = req.body;
-    const safeUserId = req.user.id || req.user.userId || req.user._id;
     const report = await IncidentReport.findById(req.params.id);
-    
+    const safeUserId = req.user.id || req.user.userId || req.user._id;
+
     if (!report) return res.status(404).json({ message: "Report not found" });
+
+    // Initialize flags array if it doesn't exist
     if (!report.flags) report.flags = [];
 
-    // Prevent double-flagging
-    if (report.flags.some(id => id.toString() === safeUserId.toString())) {
-      return res.status(400).json({ message: "You already flagged this report." });
+    // Prevent a user from flagging the same post 10 times
+    if (report.flags.includes(safeUserId)) {
+      return res.status(400).json({ message: "You have already flagged this report." });
     }
 
     report.flags.push(safeUserId);
-    await report.save();
 
-    // Send to Admin Dashboard
-    await ModerationReport.create({
-      targetId: report._id,
-      targetType: "IncidentReport", 
-      reportedBy: safeUserId,
-      reason: reason || "Inappropriate Content"
-    });
+    // 🚀 THE AUTO-MODERATOR LOGIC
+    if (report.flags.length >= 5) {
+      // 1. Pull the post off the public feed immediately
+      report.status = "under_review"; 
 
-    // Re-trigger AI Review
-    if (report.flags.length >= 1) {
-      const { verifyReport } = require("../utils/aiModerator"); 
-      const aiStatus = await verifyReport(report.title, report.description, report.category);
-      if (aiStatus !== "approved") {
-        report.status = "pending"; 
-        await report.save();
-        return res.json({ message: "Report flagged and removed for admin review." });
+      // 2. Heavily penalize the author's trust score
+      if (report.userId) {
+        const author = await User.findById(report.userId);
+        if (author) {
+          author.trustScore -= 15; // Massive penalty for fake reports
+          
+          // 3. Auto-ban if they drop below zero
+          if (author.trustScore <= 0) {
+            author.isRestricted = true; 
+          }
+          await author.save();
+        }
       }
     }
 
-    res.json({ message: "Report flagged successfully and sent to Command Center." });
+    await report.save();
+    
+    if (report.status === "under_review") {
+      res.json({ message: "Report has been hidden pending Admin review." });
+    } else {
+      res.json({ message: `Report flagged. Total flags: ${report.flags.length}/5 before removal.` });
+    }
+
   } catch (err) {
-    console.error("Flag Error:", err);
-    res.status(500).json({ message: "Error flagging report" });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -199,11 +216,32 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 // ✅ Status Update (Admin Only)
-router.patch("/:id/status", auth, isAdmin, async (req, res) => {
+// ✅ Status Update (Admin Only)
+router.patch("/:id/status", auth, async (req, res) => {
   try {
-    const report = await IncidentReport.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+    // Basic admin check
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const { status, moderatorMessage } = req.body;
+    
+    // 🚀 NEW: Save the status AND the message
+    const updateData = { status };
+    if (moderatorMessage) {
+      updateData.moderatorMessage = moderatorMessage;
+    }
+
+    const report = await IncidentReport.findByIdAndUpdate(
+      req.params.id, 
+      updateData, 
+      { new: true }
+    );
+    
     res.json(report);
-  } catch (err) { res.status(500).send(); }
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 // ✅ EDIT a Report (Authorized: Owner Only)

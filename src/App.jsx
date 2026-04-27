@@ -18,10 +18,7 @@ export default function App() {
         <main className="max-w-7xl mx-auto px-6 py-10">
           <Routes>
             <Route path="/" element={<Home />} />
-            
-            {/* 🚀 THE FIX: Tell React to render the Home map for the /explore link too! */}
             <Route path="/explore" element={<Home />} />
-            
             <Route path="/reports/:id" element={<ReportDetail />} />
             <Route path="/submit" element={<SubmitReport />} />
             <Route path="/login" element={<Login />} />

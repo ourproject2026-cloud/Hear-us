@@ -39,7 +39,11 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
-  },
+
+    // 🚀 NEW: The Invisible Reputation Engine
+  trustScore: { type: Number, default: 50 },
+  isRestricted: { type: Boolean, default: false } // Auto-bans them if score hits 0
+},
   { timestamps: true }
 );
 
